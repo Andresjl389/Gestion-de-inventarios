@@ -18,13 +18,8 @@ jobs:
 
           if [[ $TEXT =~ (TASK-[0-9]+) ]]; then
             TASK_ID=${BASH_REMATCH[1]}
-            TASK_NUMBER=$(echo $TASK_ID | cut -d'-' -f2)
-
             echo "task_id=$TASK_ID" >> $GITHUB_OUTPUT
-            echo "task_number=$TASK_NUMBER" >> $GITHUB_OUTPUT
-
             echo "TASK detectado: $TASK_ID"
-            echo "Número extraído: $TASK_NUMBER"
           else
             echo "No se encontró TASK ID"
           fi
@@ -52,7 +47,7 @@ jobs:
           echo "status=$STATUS" >> $GITHUB_OUTPUT
 
       - name: Find page in Notion
-        if: steps.extract.outputs.task_number != ''
+        if: steps.extract.outputs.task_id != ''
         id: find
         run: |
           RESPONSE=$(curl -s -X POST "https://api.notion.com/v1/databases/${{ secrets.NOTION_DATABASE_ID }}/query" \
@@ -61,9 +56,9 @@ jobs:
             -H "Content-Type: application/json" \
             --data '{
               "filter": {
-                "property": "ID",
-                "unique_id": {
-                  "equals": '"${{ steps.extract.outputs.task_number }}"'
+                "property": "ID Texto",
+                "rich_text": {
+                  "equals": "'"${{ steps.extract.outputs.task_id }}"'"
                 }
               }
             }')
