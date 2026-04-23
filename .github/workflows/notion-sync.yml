@@ -14,8 +14,19 @@ jobs:
         id: extract
         run: |
           TEXT="${{ github.event.head_commit.message }} ${{ github.event.pull_request.title }} ${{ github.head_ref }}"
+          echo "Texto completo: $TEXT"
+
           if [[ $TEXT =~ (TASK-[0-9]+) ]]; then
-            echo "task_id=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+            TASK_ID=${BASH_REMATCH[1]}
+            TASK_NUMBER=$(echo $TASK_ID | cut -d'-' -f2)
+
+            echo "task_id=$TASK_ID" >> $GITHUB_OUTPUT
+            echo "task_number=$TASK_NUMBER" >> $GITHUB_OUTPUT
+
+            echo "TASK detectado: $TASK_ID"
+            echo "Número extraído: $TASK_NUMBER"
+          else
+            echo "No se encontró TASK ID"
           fi
 
       - name: Set status based on event
@@ -37,10 +48,11 @@ jobs:
             fi
           fi
 
+          echo "Estado definido: $STATUS"
           echo "status=$STATUS" >> $GITHUB_OUTPUT
 
       - name: Find page in Notion
-        if: steps.extract.outputs.task_id != ''
+        if: steps.extract.outputs.task_number != ''
         id: find
         run: |
           RESPONSE=$(curl -s -X POST "https://api.notion.com/v1/databases/${{ secrets.NOTION_DATABASE_ID }}/query" \
@@ -50,19 +62,25 @@ jobs:
             --data '{
               "filter": {
                 "property": "ID",
-                "rich_text": {
-                  "equals": "'"${{ steps.extract.outputs.task_id }}"'"
+                "unique_id": {
+                  "equals": '"${{ steps.extract.outputs.task_number }}"'
                 }
               }
             }')
 
+          echo "Respuesta Notion:"
+          echo "$RESPONSE"
+
           PAGE_ID=$(echo $RESPONSE | jq -r '.results[0].id')
 
           echo "page_id=$PAGE_ID" >> $GITHUB_OUTPUT
+          echo "Page encontrada: $PAGE_ID"
 
       - name: Update status in Notion
         if: steps.find.outputs.page_id != '' && steps.status.outputs.status != ''
         run: |
+          echo "Actualizando estado a: ${{ steps.status.outputs.status }}"
+
           curl -X PATCH "https://api.notion.com/v1/pages/${{ steps.find.outputs.page_id }}" \
             -H "Authorization: Bearer ${{ secrets.NOTION_TOKEN }}" \
             -H "Notion-Version: 2022-06-28" \
@@ -76,3 +94,5 @@ jobs:
                 }
               }
             }'
+
+          echo "Actualización enviada a Notion"
